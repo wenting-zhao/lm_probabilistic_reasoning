@@ -65,8 +65,7 @@ train_texts, train_labels = get_data(directory, 'train')
 valid_texts, valid_labels = get_data(directory, 'dev')
 test_texts, test_labels = get_data(directory, 'test')
 
-#tokenizer = RobertaTokenizer.from_pretrained("LIAMF-USP/roberta-large-finetuned-race")
-tokenizer = RobertaTokenizer.from_pretrained('roberta-large')
+tokenizer = RobertaTokenizer.from_pretrained("LIAMF-USP/roberta-large-finetuned-race")
 tokenizer.add_tokens([str(i*0.1) for i in range(1, 10)])
 
 train_encodings = get_encodings(directory, 'train') 
@@ -91,6 +90,7 @@ training_args = TrainingArguments(
 )
 
 model = RobertaForSequenceClassification.from_pretrained(args.model_dir, num_labels=1)
+model.resize_token_embeddings(len(tokenizer))
 
 metric = load_metric("/mnt/beegfs/bulk/mirror/wz346/probabilistic_reasoning/utils/metrics/regress.py")
 def compute_metrics(eval_pred):

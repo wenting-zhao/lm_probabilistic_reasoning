@@ -145,7 +145,7 @@ class Rule:
             isinstance(other, Rule)
             and set(self.lhs) == set(other.lhs)
             and self.rhs == other.rhs
-            and self.probability == other.probability
+            #and self.probability == other.probability
         )
 
     def sorted_lhs(self):

@@ -215,6 +215,8 @@ def run_theory_in_problog(theory, assertion):
         dag = LogicDAG.create_from(lf)  # break cycles in the ground program
         #sdd = SDD.create_from(dag)
         #result = sdd.evaluate()
+        sdd = SDD.create_from(dag)
+        result = sdd.evaluate()
         cnf = CNF.create_from(dag)
         ddnnf = DDNNF.create_from(cnf)
         result = ddnnf.evaluate()
@@ -305,6 +307,7 @@ def generate_random_example(
                     # If the current start symbol for generation is supposed to be a rule,
                     # parse the generated statement as a rule.
                     generated_rule = parse_rule(generated_statement)
+                    if generated_rule is None: continue
 
                     # Constrain rule such that:
                     #   All non-first entities appear earlier in the rule.

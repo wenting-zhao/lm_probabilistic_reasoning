@@ -13,7 +13,7 @@ def process_data(f):
         context = ' '.join(context)
         q = item['english']['assertion_statement']
         label = item['theory_assertion_instance']['label']
-        ret_inputs.append(context+' <sep> '+q)
+        ret_inputs.append(context+' </s> '+q)
         ret_labels.append(label)
     return ret_inputs, ret_labels
 

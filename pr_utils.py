@@ -87,9 +87,14 @@ def parse_rule(statement_txt):
         lhs = parse_multiple_facts(lhs_txt)
     except ValueError:
         raise ValuError(f"Unable to parse statement {statement_txt} as a rule.")
+    lhs = set(lhs)
+    if len(lhs) == 0: return None
+    lhs = list(lhs)
     idx = rhs_txt.find('0.')
     prob = float(rhs_txt[idx:idx+3])
     rhs = parse_fact(rhs_txt[idx+3:])
+    for f in lhs:
+        if f == rhs: return None
     return Rule(lhs, rhs, prob)
 
 

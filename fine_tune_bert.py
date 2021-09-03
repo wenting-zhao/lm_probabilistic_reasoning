@@ -8,18 +8,7 @@ from transformers import RobertaForSequenceClassification, Trainer, TrainingArgu
 from sklearn.metrics import r2_score
 from utils import dataset
 from utils import utils
-
-
-class RegressionTrainer(Trainer):
-    def compute_loss(self, model, inputs, return_outputs=False):
-        labels = inputs.pop("labels")
-        outputs = model(**inputs)
-        logits = outputs.logits
-        loss_fct = torch.nn.MSELoss()
-        #loss_fct = torch.nn.L1Loss()
-        #loss_fct = utils.r2_loss
-        loss = loss_fct(logits.view(-1), labels.float().view(-1))
-        return (loss, outputs) if return_outputs else loss
+from ray.tune.schedulers import AsyncHyperBandScheduler
 
 
 def get_args():
@@ -30,20 +19,26 @@ def get_args():
                         help="batch size per gpu.")
     parser.add_argument("--epoch", '-epoch', type=int, required=True,
                         help="The number of epochs for fine-tuning.")
-    parser.add_argument("--learning_rate", '-lr', default=1e-5, type=float,
+    parser.add_argument("--learning_rate", '-lr', default=5e-5, type=float,
                         help="The learning rate for fine-tuning.")
     parser.add_argument("--model_dir", default="LIAMF-USP/roberta-large-finetuned-race", type=str,
                         help="The directory where the pretrained model will be loaded.")
     parser.add_argument("--data_dir", default="data/random", type=str,
                         help="data directory")
+    parser.add_argument("--mode", "-m", default="regression", type=str, choices=["3cls", "10cls", "regression"],
+                        help="data directory")
     parser.add_argument("--test_only", action='store_true',
                         help="test only mode")
+    parser.add_argument("--hyperparameter_search", "-hs", action='store_true',
+                        help="hyperparameter search")
+    parser.add_argument("--not_special_tokens", "-st", action='store_true',
+                        help="whether not to use special tokens")
 
 
     args = parser.parse_args()
     return args
  
-def get_data(directory, split):
+def get_data(directory, split, mode):
     feats = []
     with open(f"{directory}/input0_{split}", 'r') as fin:
          for line in fin:
@@ -55,7 +50,19 @@ def get_data(directory, split):
          for line in fin:
              line = line.strip()
              if line == '': continue
-             labels.append(line)
+             if mode == "regression":
+                 label = line
+             elif mode == "3cls":
+                 label = float(line)
+                 if label < 1/3:
+                     label = "0"
+                 elif 1/3 <= label < 2/3:
+                     label = "1"
+                 else:
+                     label = "2"
+             elif mode == "10cls":
+                 label = line[line.find('.')+1]
+             labels.append(label)
     return feats, labels
 
 def get_encodings(directory, split):
@@ -68,13 +75,20 @@ def get_encodings(directory, split):
 
 args = get_args()
 directory = args.data_dir
-train_texts, train_labels = get_data(directory, 'train')
-valid_texts, valid_labels = get_data(directory, 'dev')
-test_texts, test_labels = get_data(directory, 'test')
+train_texts, train_labels = get_data(directory, 'train', args.mode)
+valid_texts, valid_labels = get_data(directory, 'dev', args.mode)
+test_texts, test_labels = get_data(directory, 'test', args.mode)
 
 tokenizer = RobertaTokenizer.from_pretrained(args.model_dir)
-model = RobertaForSequenceClassification.from_pretrained(args.model_dir, num_labels=1)
-if args.model_dir == "LIAMF-USP/roberta-large-finetuned-race":
+if args.mode == "regression":
+    num_labels = 1
+elif args.mode == "3cls":
+    num_labels = 3
+elif args.mode == "10cls":
+    num_labels = 10
+model = RobertaForSequenceClassification.from_pretrained(args.model_dir, num_labels=num_labels)
+
+if (args.model_dir == "LIAMF-USP/roberta-large-finetuned-race" or args.model_dir == "roberta-large") and not args.not_special_tokens:
     new_toks = [str(round(i*0.1, 1)) for i in range(1, 10)]
     tokenizer.add_tokens(new_toks)
     print("added tokens:", new_toks)
@@ -84,9 +98,9 @@ train_encodings = get_encodings(directory, 'train')
 val_encodings = get_encodings(directory, 'valid') 
 test_encodings = get_encodings(directory, 'test') 
 
-train_dataset = dataset.Dataset(train_encodings, train_labels)
-val_dataset = dataset.Dataset(val_encodings, valid_labels)
-test_dataset = dataset.Dataset(test_encodings, test_labels)
+train_dataset = dataset.Dataset(train_encodings, train_labels, args.mode)
+val_dataset = dataset.Dataset(val_encodings, valid_labels, args.mode)
+test_dataset = dataset.Dataset(test_encodings, test_labels, args.mode)
 
 training_args = TrainingArguments(
     learning_rate=args.learning_rate,
@@ -103,14 +117,21 @@ training_args = TrainingArguments(
     eval_steps=500
 )
 
-metric = load_metric("/mnt/beegfs/bulk/mirror/wz346/probabilistic_reasoning/utils/metrics/regress.py")
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    logits = logits.squeeze()
-    return metric.compute(predictions=logits, references=labels)
+if args.mode == "regression":
+    metric = load_metric("utils/metrics/regress.py")
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        logits = logits.squeeze()
+        return metric.compute(predictions=logits, references=labels)
+else:
+    metric = load_metric("accuracy")
+    def compute_metrics(eval_pred):
+        logits, labels = eval_pred
+        predictions = np.argmax(logits, axis=-1)
+        return metric.compute(predictions=predictions, references=labels)
 
-trainer = RegressionTrainer(
-    model=model,                         # the instantiated 🤗 Transformers model to be trained
+trainer = Trainer(
+    model=model,
     tokenizer=tokenizer,
     args=training_args,                  # training arguments, defined above
     train_dataset=train_dataset,         # training dataset
@@ -118,8 +139,13 @@ trainer = RegressionTrainer(
     compute_metrics=compute_metrics
 )
 
-if not args.test_only:
-    trainer.train()
-res = trainer.predict(test_dataset)
-#res = trainer.predict(train_dataset)
-print(res[-1])
+if args.hyperparameter_search:
+    best_trial = trainer.hyperparameter_search(
+        direction="maximize",
+        backend="ray",
+        n_trials=20)  # number of hyperparameter samples
+else:
+    if not args.test_only:
+        trainer.train()
+    res = trainer.predict(test_dataset)
+    print(res[-1])

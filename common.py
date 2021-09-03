@@ -35,7 +35,7 @@ class Fact:
             and self.polarity == other.polarity
             and self.predicate == other.predicate
             and self.arguments == other.arguments
-            and self.probability == other.probability
+            #and self.probability == other.probability
         )
 
     def __lt__(self, other):
@@ -138,7 +138,7 @@ class Rule:
 
     def __repr__(self):
         lhs_repr = f'({" ".join(str(lhs_part) for lhs_part in self.lhs)})'
-        return f"{lhs_repr} -> {self.probability}{str(self.rhs)}"
+        return f"{lhs_repr} -> {self.probability}{str(self.rhs)[1:]}"
 
     def __eq__(self, other):
         return (

@@ -274,6 +274,8 @@ def generate_random_example(
     statement_types,
     assertion_start_symbol,
     theorem_prover,
+    max_depth,
+    min_depth
 ):
     example = None
 
@@ -389,7 +391,7 @@ def generate_random_example(
             theory, assertion, theorem_prover_config, theorem_prover
         )
 
-        if label is not None and label > 0:
+        if label is not None and label > 0 and min_depth <= proof_depth <= max_depth:
             # Construct example with label
             example_id = str(example_id)
             if len(example_id_prefix) > 0:
@@ -413,6 +415,8 @@ def generate_theory(
     config,
     theory_op_file,
     theorem_prover,
+    max_depth,
+    min_depth
 ):
     """Generate a theory with specified properties per config file specifications, using the
     specified grammar.
@@ -448,6 +452,8 @@ def generate_theory(
             statement_types,
             assertion_start_symbol,
             theorem_prover,
+            max_depth,
+            min_depth
         )
         if example is not None:
             if example.theory_assertion_instance.label:
@@ -542,6 +548,8 @@ def main():
         default=common.default_theorem_prover,
         help="Thorem proving engine to use. Only supported one right now is problog.",
     )
+    parser.add_argument("--max_depth", type=int, default=9, help="maximum depth for proof tree")
+    parser.add_argument("--min_depth", type=int, default=0, help="minimum depth for proof tree")
     args = parser.parse_args()
 
     with open(args.grammar, "r") as grammar_file, open(
@@ -557,6 +565,8 @@ def main():
             config,
             theory_op_file,
             args.theorem_prover,
+            args.max_depth,
+            args.min_depth
         )
 
 

@@ -9,6 +9,7 @@ from sklearn.metrics import r2_score
 from utils import dataset
 from utils import utils
 from ray.tune.schedulers import AsyncHyperBandScheduler
+import numpy as np
 
 
 def get_args():
@@ -31,7 +32,7 @@ def get_args():
                         help="test only mode")
     parser.add_argument("--hyperparameter_search", "-hs", action='store_true',
                         help="hyperparameter search")
-    parser.add_argument("--not_special_tokens", "-st", action='store_true',
+    parser.add_argument("--no_special_tokens", "-nst", action='store_true',
                         help="whether not to use special tokens")
 
 
@@ -61,7 +62,8 @@ def get_data(directory, split, mode):
                  else:
                      label = "2"
              elif mode == "10cls":
-                 label = line[line.find('.')+1]
+                 label = float(line)
+                 label = str(round(label, 1))[-1]
              labels.append(label)
     return feats, labels
 
@@ -88,8 +90,11 @@ elif args.mode == "10cls":
     num_labels = 10
 model = RobertaForSequenceClassification.from_pretrained(args.model_dir, num_labels=num_labels)
 
-if (args.model_dir == "LIAMF-USP/roberta-large-finetuned-race" or args.model_dir == "roberta-large") and not args.not_special_tokens:
-    new_toks = [str(round(i*0.1, 1)) for i in range(1, 10)]
+if (args.model_dir == "LIAMF-USP/roberta-large-finetuned-race" or args.model_dir == "roberta-large") and not args.no_special_tokens:
+    if "100token" in args.data_dir:
+        new_toks = [str(round(i*0.01, 2)) for i in range(1, 100)]
+    else:
+        new_toks = [str(round(i*0.1, 1)) for i in range(1, 10)]
     tokenizer.add_tokens(new_toks)
     print("added tokens:", new_toks)
     model.resize_token_embeddings(len(tokenizer))

@@ -11,9 +11,9 @@ print(train_end, dev_end)
 
 def split_file(path, fn):
     with open(f'{path}/{fn}', 'r') as fin:
-        with open(f'train.{fn}', 'w') as train_out:
-            with open(f'valid.{fn}', 'w') as dev_out:
-                with open('test.{fn}', 'w') as test_out:
+        with open(f'{path}/train.{fn}', 'w') as train_out:
+            with open(f'{path}/valid.{fn}', 'w') as dev_out:
+                with open(f'{path}/test.{fn}', 'w') as test_out:
                     for i, line in enumerate(fin):
                         if i <= train_end:
                             train_out.write(line)

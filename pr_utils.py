@@ -93,8 +93,9 @@ def parse_rule(statement_txt):
     idx = rhs_txt.find('0.')
     if idx == -1:
         idx = rhs_txt.find('1.')
-    prob = float(rhs_txt[idx:idx+3])
-    rhs = parse_fact(rhs_txt[idx+3:])
+    idx2 = rhs_txt.find('(')
+    prob = float(rhs_txt[idx:idx2])
+    rhs = parse_fact(rhs_txt[idx2:])
     for f in lhs:
         if f == rhs: return None
     return Rule(lhs, rhs, prob)
